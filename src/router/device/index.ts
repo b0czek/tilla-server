@@ -7,6 +7,6 @@ import { registrationRouter } from "./registration";
 export const deviceRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, dispatcher: Dispatcher) => {
     const router = Router();
     router.use("/registration", registrationRouter(orm, dispatcher));
-    router.use("/", deviceEndpoints(orm));
+    router.use("/", deviceEndpoints(orm, dispatcher));
     return router;
 };

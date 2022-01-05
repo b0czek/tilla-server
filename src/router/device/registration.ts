@@ -7,7 +7,7 @@ import { helper } from "..";
 import { Registration, RegistrationResponse } from "../../api";
 import { Dispatcher } from "../../dispatcher";
 
-const registrationProps = {
+export const registrationProps = {
     ip: "string",
     name: "string",
     polling_interval: "number",
