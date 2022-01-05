@@ -11,7 +11,7 @@ export interface RegistrationProps {
     name: string;
     polling_interval: number;
 }
-
+// !! why is it in dispatcher
 export const register = async (em: EM, props: RegistrationProps) => {
     let regInfo = await Registration.Info.fetch({ ip: props.ip });
 

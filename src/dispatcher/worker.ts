@@ -24,10 +24,7 @@ export class DispatcherWorker {
         this.redisClient = redisClient;
         this.uuid = device.device_uuid;
         for (let sensor of device.sensors.getItems()) {
-            this.sensorsData.push({
-                sensor,
-                data: this._getErroredSensorData(),
-            });
+            this._initSensorData(sensor);
         }
         setImmediate(async () => await this._pollDevice());
         this.pollInterval = setInterval(this._pollDevice, this.device.polling_interval);
@@ -46,6 +43,39 @@ export class DispatcherWorker {
             clearInterval(this.pollInterval);
         }
         this.pollInterval = null;
+    }
+    /**
+     * function adding sensor to worker's sensor pool, it must be valid - worker does not have access to database to validate it
+     * @param sensor database object of sensor
+     */
+    public addSensor(sensor: Sensor) {
+        console.log(`adding sensor ${sensor.sensor_uuid}`);
+        this._initSensorData(sensor);
+    }
+    /**
+     * function updating sensor's data, data must be valid - worker does not have access to database to validate it
+     * @param sensor database object of sensor
+     */
+    public updateSensor(sensor: Sensor) {
+        let sensorData = this.sensorsData.find((sensorData) => sensorData.sensor.sensor_uuid === sensor.sensor_uuid);
+        if (!sensorData) {
+            throw new Error("could not update sensor because it does not exist");
+        }
+        console.log(`updating sensor ${sensor.sensor_uuid}`);
+        sensorData.sensor = sensor;
+    }
+
+    public async removeSensor(sensor_uuid: string, options: SensorRemoveOptions = { removeRedisHistory: false }) {
+        let idx = this.sensorsData.findIndex((sensorData) => sensorData.sensor.sensor_uuid === sensor_uuid);
+        if (idx == -1) {
+            throw new Error("could not remove sensor because it does not exist");
+        }
+
+        if (options.removeRedisHistory) {
+            await this.redisClient.del(sensor_uuid);
+        }
+        console.log(`removing sensor ${sensor_uuid}`);
+        this.sensorsData.splice(idx, 1);
     }
 
     private _pollDevice = async () => {
@@ -131,6 +161,17 @@ export class DispatcherWorker {
             pressure: null,
         };
     }
+
+    private _initSensorData(sensor: Sensor) {
+        this.sensorsData.push({
+            sensor,
+            data: this._getErroredSensorData(),
+        });
+    }
+}
+
+export interface SensorRemoveOptions {
+    removeRedisHistory: boolean;
 }
 
 export interface Sample extends ISensorData {

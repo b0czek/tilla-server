@@ -124,7 +124,6 @@ export const sensorRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, dispatc
         if (!(body.address in sensorInfo[body.type].sensors)) {
             return helper.badRequest(res, "no sensor of given address");
         }
-
         let sensor = orm.em.create(Sensor, {
             address: body.address,
             type: body.type,
@@ -132,11 +131,66 @@ export const sensorRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, dispatc
             buffer_expiration_time: body.buffer_expiration_time,
             device,
         });
-        await orm.em.persistAndFlush(sensor);
+        try {
+            await orm.em.persistAndFlush(sensor);
+        } catch (err) {
+            return helper.error(500, res, "could not add register sensor in database");
+        }
+
+        let worker = dispatcher.findWorker(device.device_uuid);
+        if (!worker) {
+            return helper.error(500, res, "sensor registered, but its device worker does not work", {
+                sensor_uuid: sensor.sensor_uuid,
+            });
+        }
+        worker.addSensor(sensor);
 
         return res.json({
             error: false,
             sensor_uuid: sensor.sensor_uuid,
+        });
+    });
+
+    router.post("/edit", helper.verifyReq(sensorEditProps, true), helper.getDevice(orm), async (req, res) => {
+        let body = <SensorEditProps>req.body;
+
+        let sensor = await orm.em.findOne(Sensor, {
+            sensor_uuid: body.sensor_uuid,
+        });
+
+        if (!sensor) {
+            return helper.badRequest(res, "no sensor with given uuid found ");
+        }
+        // remove device uuid from object
+        let { device_uuid, ...obj }: SensorEditProps = res.locals.object;
+
+        const changedFields = Object.fromEntries(
+            Object.entries(obj).filter(([key, value]) => value !== sensor![<keyof typeof sensor>key])
+        );
+
+        if (Object.keys(changedFields).length === 0) {
+            return helper.badRequest(res, "no field was changed");
+        }
+
+        sensor = orm.em.assign(sensor, changedFields);
+
+        try {
+            await orm.em.persistAndFlush(sensor);
+        } catch (err) {
+            return helper.error(500, res, "could not modify entity");
+        }
+
+        let worker = dispatcher.findWorker(device_uuid);
+        if (!worker) {
+            return helper.error(500, res, "sensor updated but its device worker does not work", {
+                changedFields,
+            });
+        }
+        worker.updateSensor(sensor);
+
+        return res.json({
+            error: false,
+            changedFields,
         });
     });
 
@@ -165,4 +219,13 @@ interface SensorRegisrationProps {
     type: string;
     address: string;
     buffer_expiration_time: number;
+}
+
+const sensorEditProps = {
+    ...sensorRegistrationProps,
+    sensor_uuid: "string",
+};
+
+interface SensorEditProps extends SensorRegisrationProps {
+    sensor_uuid: string;
 }

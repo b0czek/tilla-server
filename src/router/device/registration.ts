@@ -5,6 +5,7 @@ import { register, RegistrationProps } from "../../dispatcher/register";
 import { Device } from "../../entities/Device";
 import { helper } from "..";
 import { Registration, RegistrationResponse } from "../../api";
+import { Dispatcher } from "../../dispatcher";
 
 const registrationProps = {
     ip: "string",
@@ -12,7 +13,7 @@ const registrationProps = {
     polling_interval: "number",
 };
 
-export const registrationRouter = (orm: MikroORM<IDatabaseDriver<Connection>>) => {
+export const registrationRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, dispatcher: Dispatcher) => {
     const router = express.Router();
 
     router.post("/register", helper.verifyReq(registrationProps), async (req, res) => {
@@ -23,6 +24,14 @@ export const registrationRouter = (orm: MikroORM<IDatabaseDriver<Connection>>) =
             device = await register(orm.em, body);
         } catch (err) {
             return helper.error(503, res, err.message);
+        }
+
+        try {
+            await dispatcher.reloadWorker(device.device_uuid);
+        } catch (err) {
+            return helper.error(500, res, "device was registered, but its worker could not be dispatched", {
+                device_id: device.device_uuid,
+            });
         }
 
         return res.json({
@@ -45,6 +54,13 @@ export const registrationRouter = (orm: MikroORM<IDatabaseDriver<Connection>>) =
         } catch (err) {
             return helper.error(503, res, "unregistration failed");
         }
+
+        try {
+            await dispatcher.removeWorker(res.locals.device);
+        } catch (err) {
+            return helper.error(500, res, "device unregistered but device worker could not be unregistered");
+        }
+
         try {
             await orm.em.removeAndFlush(res.locals.device);
         } catch (err) {

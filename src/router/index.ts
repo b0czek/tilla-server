@@ -6,15 +6,22 @@ import { queryParser } from "express-query-parser";
 import { Device } from "../entities/Device";
 import { Dispatcher } from "../dispatcher";
 
-const error = (code: number, res: Response, message: string) => {
+const error = (code: number, res: Response, message: string, additionalFields?: { [key: string]: any }) => {
     return res.status(code).json({
         error: true,
         message,
+        ...additionalFields,
     });
 };
 const badRequest = (res: Response, message = "invalid request") => error(400, res, message);
 
-const verifyReq = (requiredFields: RequiredFields) => {
+/**
+ * function returning middleware verifying provided data, according to method.
+ * @param requiredFields object with declarations of required fields, in example: `{ id: "string"}`
+ * @param buildObjectFromRequiredFields whether to build object from required and required only fields and put it in `res.locals.object`
+ * @returns middleware
+ */
+const verifyReq = (requiredFields: RequiredFields, buildObjectFromRequiredFields = false) => {
     return (req: Request, res: Response, next: NextFunction) => {
         let fields!: { [field: string]: any };
         if (req.method == "GET") {
@@ -33,9 +40,16 @@ const verifyReq = (requiredFields: RequiredFields) => {
                 return badRequest(res, `invalid field '${field}'`);
             }
         }
+        if (buildObjectFromRequiredFields) {
+            res.locals.object = Object.fromEntries(
+                Object.entries(requiredFields).map(([key, _]) => [key, fields[key]])
+            );
+        }
+
         return next();
     };
 };
+
 /**
  * function returning middleware that fetches device object (and places it in res.local.device) or returns 400 if not found
  * @param orm mikroorm object
@@ -100,7 +114,7 @@ export const apiRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, dispatcher
         }),
         express.json()
     );
-    router.use("/device", deviceRouter(orm));
+    router.use("/device", deviceRouter(orm, dispatcher));
     router.use("/sensors", sensorRouter(orm, dispatcher));
     return router;
 };
