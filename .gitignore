@@ -4,3 +4,4 @@ dist
 build
 src/migrations
 temp
+tilla.sqlite

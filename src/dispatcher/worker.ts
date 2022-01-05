@@ -1,36 +1,44 @@
 import { ISensorData, ISensorsInfo, Sensors } from "../api";
 import { Sensor } from "../entities/Sensor";
 import { Device } from "../entities/Device";
+import { RedisClient } from ".";
 
 const RETRY_COUNT = 3;
-const SAMPLE_BUFFER_SIZE = 100;
 
 interface ISensor {
     data: ISensorData;
-    buffer: SampleBuffer;
     sensor: Sensor;
 }
 
 export class DispatcherWorker {
     private device: Device;
+    private redisClient: RedisClient;
     private pollInterval: NodeJS.Timeout | null = null;
     public uuid: string;
     public online: boolean = false;
 
     public sensorsData: ISensor[] = [];
 
-    constructor(device: Device) {
+    constructor(device: Device, redisClient: RedisClient) {
         this.device = device;
+        this.redisClient = redisClient;
         this.uuid = device.device_uuid;
         for (let sensor of device.sensors.getItems()) {
             this.sensorsData.push({
                 sensor,
                 data: this._getErroredSensorData(),
-                buffer: new SampleBuffer(SAMPLE_BUFFER_SIZE),
             });
         }
         setImmediate(async () => await this._pollDevice());
         this.pollInterval = setInterval(this._pollDevice, this.device.polling_interval);
+    }
+
+    public async getSamples(sensor: ISensor, age = +Date.now()) {
+        let now = +Date.now();
+        await this._removeOldEntries(sensor);
+        let since = now - age;
+        console.log(since);
+        return this.redisClient.zRangeByScore(sensor.sensor.sensor_uuid, since, now);
     }
 
     public stop() {
@@ -67,11 +75,35 @@ export class DispatcherWorker {
             } else {
                 console.log(`${sensor.sensor.sensor_uuid}: ${JSON.stringify(sensorData)}`);
                 sensor.data = sensorData;
-                sensor.buffer.pushData(sensorData);
+                await this._addSample(sensor, sensorData);
             }
         }
     };
 
+    // add entry to redis and remove old
+    private async _addSample(sensor: ISensor, data: ISensorData) {
+        let timestamp = +Date.now();
+        try {
+            await this.redisClient.zAdd(sensor.sensor.sensor_uuid, {
+                score: timestamp,
+                value: JSON.stringify({
+                    timestamp,
+                    ...data,
+                }),
+            });
+            await this._removeOldEntries(sensor, timestamp);
+        } catch (err) {
+            console.error(err.message);
+        }
+    }
+
+    // remove entries past expiration date in redis
+    private async _removeOldEntries(sensor: ISensor, since = +Date.now()) {
+        let olderThan = since - sensor.sensor.buffer_expiration_time;
+        return this.redisClient.zRemRangeByScore(sensor.sensor.sensor_uuid, 0, olderThan);
+    }
+
+    // find sensor in query result
     private _findSensor(sensor: ISensor, data: ISensorsInfo): ISensorData | null {
         if (!(sensor.sensor.type in data)) {
             return null;
@@ -88,7 +120,7 @@ export class DispatcherWorker {
     private _errorSensor(sensor: ISensor) {
         let newData = this._getErroredSensorData();
         sensor.data = newData;
-        sensor.buffer.pushData(newData);
+        this._addSample(sensor, newData);
     }
 
     private _getErroredSensorData(): ISensorData {
@@ -101,35 +133,6 @@ export class DispatcherWorker {
     }
 }
 
-interface Sample {
-    date: Date;
-    data: ISensorData;
-}
-
-class SampleBuffer extends Array<Sample> {
-    private bufferSize: number;
-    constructor(bufferSize: number) {
-        super();
-        this.bufferSize = bufferSize;
-        super.push();
-    }
-    public push(...samples: Sample[]): number {
-        let overflown: number = Math.max(this.length + samples.length - this.bufferSize, 0);
-        if (overflown) {
-            for (let i = 0; i < overflown; i++) {
-                if (samples.length > this.bufferSize) {
-                    samples.shift();
-                } else {
-                    this.shift();
-                }
-            }
-        }
-        return super.push(...samples);
-    }
-    public pushData(sample: ISensorData): number {
-        return this.push({
-            data: sample,
-            date: new Date(),
-        });
-    }
+export interface Sample extends ISensorData {
+    timestamp: number;
 }

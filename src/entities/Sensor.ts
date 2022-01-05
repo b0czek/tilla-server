@@ -16,6 +16,9 @@ export class Sensor {
     @Property()
     name: string;
 
+    @Property()
+    buffer_expiration_time: number;
+
     // sensor address, for example rom code in ds18b20
     @Property()
     address: string;

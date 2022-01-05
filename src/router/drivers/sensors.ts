@@ -4,9 +4,9 @@ import { Device } from "../../entities/Device";
 import { ISensorData, ISensorsInfo, Sensors } from "../../api";
 import { helper } from "..";
 import { Sensor } from "../../entities/Sensor";
-import { DispatcherWorker } from "../../dispatcher/worker";
+import { Dispatcher, Sample } from "../../dispatcher";
 
-export const sensorRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, workers: DispatcherWorker[]) => {
+export const sensorRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, dispatcher: Dispatcher) => {
     const router = Router();
 
     router.get("/list", helper.verifyReq(sensorListProps), helper.getDevice(orm), async (req, res) => {
@@ -41,7 +41,7 @@ export const sensorRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, workers
     });
 
     router.get("/data", helper.verifyReq({ device_uuid: "string" }), (req, res) => {
-        let worker = workers.find((worker) => worker.uuid === req.query.device_uuid);
+        let worker = dispatcher.workers.find((worker) => worker.uuid === req.query.device_uuid);
 
         if (!worker) {
             return helper.badRequest(res, "no device with given uuid is dispatched");
@@ -64,8 +64,8 @@ export const sensorRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, workers
         });
     });
 
-    router.get("/history", helper.verifyReq({ device_uuid: "string", sensor_uuid: "string" }), (req, res) => {
-        let worker = workers.find((worker) => worker.uuid === req.query.device_uuid);
+    router.get("/history", helper.verifyReq({ device_uuid: "string", sensor_uuid: "string" }), async (req, res) => {
+        let worker = dispatcher.workers.find((worker) => worker.uuid === req.query.device_uuid);
 
         if (!worker) {
             return helper.badRequest(res, "no device with given uuid is dispatched");
@@ -75,10 +75,17 @@ export const sensorRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, workers
         if (!sensor) {
             return helper.badRequest(res, "no sensor with given uuid is dispatched");
         }
+        console.log(`age: ${JSON.stringify(req.query)}`);
+        if (req.query.age && typeof req.query.age !== "number") {
+            return helper.badRequest(res, "invalid age");
+        }
+        let age = <number>(<any>req.query.age) ?? +Date.now();
+
+        let samples = (await worker.getSamples(sensor, age)).map((sample) => <Sample>JSON.parse(sample));
 
         return res.json({
             error: false,
-            samples: sensor.buffer,
+            samples: samples,
         });
     });
 
@@ -122,6 +129,7 @@ export const sensorRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, workers
             address: body.address,
             type: body.type,
             name: body.name,
+            buffer_expiration_time: body.buffer_expiration_time,
             device,
         });
         await orm.em.persistAndFlush(sensor);
@@ -148,6 +156,7 @@ const sensorRegistrationProps = {
     name: "string",
     type: "string",
     address: "string",
+    buffer_expiration_time: "number",
 };
 
 interface SensorRegisrationProps {
@@ -155,4 +164,5 @@ interface SensorRegisrationProps {
     name: string;
     type: string;
     address: string;
+    buffer_expiration_time: number;
 }

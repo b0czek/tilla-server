@@ -4,7 +4,7 @@ import { deviceRouter } from "./device";
 import { sensorRouter } from "./drivers/sensors";
 import { queryParser } from "express-query-parser";
 import { Device } from "../entities/Device";
-import { DispatcherWorker } from "../dispatcher/worker";
+import { Dispatcher } from "../dispatcher";
 
 const error = (code: number, res: Response, message: string) => {
     return res.status(code).json({
@@ -89,7 +89,7 @@ export const helper = {
     omitFields,
 };
 
-export const apiRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, workers: DispatcherWorker[]) => {
+export const apiRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, dispatcher: Dispatcher) => {
     const router = Router();
     router.use(
         queryParser({
@@ -101,7 +101,7 @@ export const apiRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, workers: D
         express.json()
     );
     router.use("/device", deviceRouter(orm));
-    router.use("/sensors", sensorRouter(orm, workers));
+    router.use("/sensors", sensorRouter(orm, dispatcher));
     return router;
 };
 
