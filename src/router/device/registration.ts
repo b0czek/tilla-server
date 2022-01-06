@@ -1,10 +1,9 @@
 import { IDatabaseDriver, MikroORM, Connection, NotFoundError } from "@mikro-orm/core";
 import express, { Response } from "express";
 import { isIPv4 } from "net";
-import { register, RegistrationProps } from "../../dispatcher/register";
 import { Device } from "../../entities/Device";
 import { helper } from "..";
-import { Registration, RegistrationResponse } from "../../api";
+import { Registration, RegistrationResponse, RegistrationProps } from "../../api";
 import { Dispatcher } from "../../dispatcher";
 
 export const registrationProps = {
@@ -19,9 +18,13 @@ export const registrationRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, d
     router.post("/register", helper.verifyReq(registrationProps), async (req, res) => {
         let body: RegistrationProps = req.body;
 
+        if (!isIPv4(body.ip)) {
+            return helper.badRequest(res, "invalid ip address");
+        }
+
         let device!: Device;
         try {
-            device = await register(orm.em, body);
+            device = await Registration.Register.execute(orm.em, body);
         } catch (err) {
             return helper.error(503, res, err.message);
         }
@@ -45,7 +48,7 @@ export const registrationRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, d
         let body: UnregisterReqBody = req.body;
         try {
             let unreg = await Registration.Unregister.fetch({
-                ip: res.locals.device.device_ip,
+                ip: res.locals.device.ip,
                 auth_key: res.locals.device.auth_key,
             });
             if (unreg.code !== 0 || unreg.error !== false) {

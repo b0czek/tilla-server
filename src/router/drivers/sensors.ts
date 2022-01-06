@@ -1,7 +1,7 @@
 import { Connection, IDatabaseDriver, MikroORM } from "@mikro-orm/core";
 import express, { Router } from "express";
 import { Device } from "../../entities/Device";
-import { ISensorData, ISensorsInfo, Sensors } from "../../api";
+import { FetchError, ISensorData, ISensorsInfo, Sensors } from "../../api";
 import { helper } from "..";
 import { Sensor } from "../../entities/Sensor";
 import { Dispatcher, Sample } from "../../dispatcher";
@@ -15,7 +15,7 @@ export const sensorRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, dispatc
         try {
             let data = await Sensors.Data.fetch({
                 auth_key: device.auth_key,
-                ip: device.device_ip,
+                ip: device.ip,
             });
             return res.json({
                 error: false,
@@ -41,7 +41,7 @@ export const sensorRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, dispatc
     });
 
     router.get("/data", helper.verifyReq({ device_uuid: "string" }), (req, res) => {
-        let worker = dispatcher.workers.find((worker) => worker.uuid === req.query.device_uuid);
+        let worker = dispatcher.findWorker(<string>req.query.device_uuid);
 
         if (!worker) {
             return helper.badRequest(res, "no device with given uuid is dispatched");
@@ -49,7 +49,7 @@ export const sensorRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, dispatc
         let sensors = worker.sensorsData;
 
         if (req.query.sensor_uuid) {
-            let sensor = worker.sensorsData.find((sensor) => sensor.sensor.sensor_uuid === req.query.sensor_uuid);
+            let sensor = worker.findSensor(<string>req.query.sensor_uuid);
             if (!sensor) {
                 return helper.badRequest(res, "no sensor with given uuid is dispatched");
             }
@@ -65,13 +65,13 @@ export const sensorRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, dispatc
     });
 
     router.get("/history", helper.verifyReq({ device_uuid: "string", sensor_uuid: "string" }), async (req, res) => {
-        let worker = dispatcher.workers.find((worker) => worker.uuid === req.query.device_uuid);
+        let worker = dispatcher.findWorker(<string>req.query.device_uuid);
 
         if (!worker) {
             return helper.badRequest(res, "no device with given uuid is dispatched");
         }
 
-        let sensor = worker.sensorsData.find((sensor) => sensor.sensor.sensor_uuid === req.query.sensor_uuid);
+        let sensor = worker.findSensor(<string>req.query.sensor_uuid);
         if (!sensor) {
             return helper.badRequest(res, "no sensor with given uuid is dispatched");
         }
@@ -102,28 +102,16 @@ export const sensorRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, dispatc
             return helper.badRequest(res, "sensor already registered");
         }
 
-        let sensorInfo: ISensorsInfo;
         try {
-            sensorInfo = await Sensors.Data.fetch({
+            await Sensors.Data.fetchOrFail(body.type, body.address, {
                 auth_key: device.auth_key,
-                ip: device.device_ip,
+                ip: device.ip,
             });
         } catch (err) {
-            return helper.error(503, res, "could not retrieve sensor list");
+            // error will always be fetcherror
+            return helper.error(err.statusCode, res, err.message);
         }
 
-        body.type = body.type.toLowerCase();
-        if (!(body.type in sensorInfo)) {
-            return helper.badRequest(res, "no sensor of given type");
-        }
-
-        if (sensorInfo[body.type].error) {
-            return helper.error(503, res, "given type of sensor is unavailable");
-        }
-
-        if (!(body.address in sensorInfo[body.type].sensors)) {
-            return helper.badRequest(res, "no sensor of given address");
-        }
         let sensor = orm.em.create(Sensor, {
             address: body.address,
             type: body.type,
@@ -153,7 +141,7 @@ export const sensorRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, dispatc
 
     router.post("/edit", helper.verifyReq(sensorEditProps, true), helper.getDevice(orm), async (req, res) => {
         let body = <SensorEditProps>req.body;
-
+        let device = <Device>res.locals.device;
         let sensor = await orm.em.findOne(Sensor, {
             sensor_uuid: body.sensor_uuid,
         });
@@ -164,12 +152,45 @@ export const sensorRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, dispatc
         // remove device uuid from object
         let { device_uuid, ...obj }: SensorEditProps = res.locals.object;
 
-        const changedFields = Object.fromEntries(
-            Object.entries(obj).filter(([key, value]) => value !== sensor![<keyof typeof sensor>key])
+        const changedFields = <Partial<SensorEditProps>>(
+            Object.fromEntries(
+                Object.entries(obj).filter(([key, value]) => value !== sensor![<keyof typeof sensor>key])
+            )
         );
 
         if (Object.keys(changedFields).length === 0) {
             return helper.badRequest(res, "no field was changed");
+        }
+        // check if important data changed
+        if ("type" in changedFields || "address" in changedFields) {
+            // if particular field didn't change, get value from actual object
+            let address = changedFields.address ?? sensor.address;
+            let type = changedFields.type ?? sensor.type;
+
+            try {
+                // fetch db for same sensor config
+                await device.sensors.init({
+                    where: {
+                        type,
+                        address,
+                    },
+                });
+            } catch (err) {
+                return helper.error(500, res, "could not fetch database");
+            }
+            // if there is one already, send bad request
+            if (device.sensors.length !== 0) {
+                return helper.badRequest(res, "sensor with given type and address already exists");
+            }
+            // if there is not, check if the sensor is available on device
+            try {
+                await Sensors.Data.fetchOrFail(type, address, {
+                    ip: device.ip,
+                    auth_key: device.auth_key,
+                });
+            } catch (err) {
+                return helper.error(err.statusCode, res, err.message);
+            }
         }
 
         sensor = orm.em.assign(sensor, changedFields);

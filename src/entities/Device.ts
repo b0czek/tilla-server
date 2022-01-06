@@ -26,7 +26,7 @@ export class Device {
     registration_date = new Date();
 
     @Property({ type: "string" })
-    device_ip: string;
+    ip: string;
 
     @Property({ type: "string" })
     chip_id: string;

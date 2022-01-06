@@ -1,10 +1,11 @@
 import { Connection, IDatabaseDriver, MikroORM } from "@mikro-orm/core";
 import express from "express";
-import { RegistrationProps } from "../../dispatcher/register";
+import { RegistrationProps } from "../../api";
 import { helper } from "..";
 import { Device } from "../../entities/Device";
 import { registrationProps } from "./registration";
 import { Dispatcher } from "../../dispatcher";
+import { isIPv4 } from "net";
 
 export const deviceEndpoints = (orm: MikroORM<IDatabaseDriver<Connection>>, dispatcher: Dispatcher) => {
     const router = express.Router();
@@ -32,6 +33,19 @@ export const deviceEndpoints = (orm: MikroORM<IDatabaseDriver<Connection>>, disp
 
         if (Object.keys(changedFields).length === 0) {
             return helper.badRequest(res, "no field was changed");
+        }
+
+        if ("ip" in changedFields) {
+            let ip = <string>changedFields.ip;
+            if (!isIPv4(<string>ip)) {
+                return helper.badRequest(res, "invalid ip address");
+            }
+            let sameDeviceIP = await orm.em.count(Device, {
+                ip,
+            });
+            if (sameDeviceIP != 0) {
+                return helper.badRequest(res, "there is already device with the same ip address");
+            }
         }
 
         device = orm.em.assign(device, changedFields);

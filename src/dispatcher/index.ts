@@ -69,7 +69,7 @@ export class Dispatcher {
         worker.stop();
 
         // if specified, remove all sensor history from redis
-        if (options.removeRedisHistory) {
+        if (options.removeRedisHistory && worker.sensorsData.length > 0) {
             await this.redisClient.del(worker.sensorsData.map((data) => data.sensor.sensor_uuid));
         }
 

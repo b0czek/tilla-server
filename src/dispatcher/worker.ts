@@ -30,6 +30,9 @@ export class DispatcherWorker {
         this.pollInterval = setInterval(this._pollDevice, this.device.polling_interval);
     }
 
+    public findSensor = (sensor_uuid: string) =>
+        this.sensorsData.find((sensorData) => sensorData.sensor.sensor_uuid == sensor_uuid);
+
     public async getSamples(sensor: ISensor, age = +Date.now()) {
         let now = +Date.now();
         await this._removeOldEntries(sensor);
@@ -87,7 +90,7 @@ export class DispatcherWorker {
             try {
                 data = await Sensors.Data.fetch({
                     auth_key: this.device.auth_key,
-                    ip: this.device.device_ip,
+                    ip: this.device.ip,
                 });
             } catch (err) {
                 console.error(`polling device ${this.uuid} failed. `);
