@@ -56,15 +56,20 @@ export const registrationRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, d
         }
 
         try {
-            await dispatcher.removeWorker(res.locals.device);
+            await orm.em.removeAndFlush(res.locals.device);
         } catch (err) {
-            return helper.error(500, res, "device unregistered but device worker could not be unregistered");
+            console.error(err);
+
+            return helper.error(500, res, "device unregistered but could not be removed from database");
         }
 
         try {
-            await orm.em.removeAndFlush(res.locals.device);
+            await dispatcher.removeWorker(res.locals.device.device_uuid, {
+                removeRedisHistory: true,
+            });
         } catch (err) {
-            return helper.error(500, res, "device unregistered but could not be removed from database");
+            console.error(err);
+            return helper.error(500, res, "device unregistered but device worker could not be unregistered");
         }
 
         return res.json({

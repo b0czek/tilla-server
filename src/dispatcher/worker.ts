@@ -79,8 +79,10 @@ export class DispatcherWorker {
     }
 
     private _pollDevice = async () => {
+        if (this.sensorsData.length == 0) {
+            return;
+        }
         let data!: ISensorsInfo;
-
         for (let i = 0; i < RETRY_COUNT && !data; i++) {
             try {
                 data = await Sensors.Data.fetch({

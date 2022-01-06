@@ -194,6 +194,48 @@ export const sensorRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, dispatc
         });
     });
 
+    router.post(
+        "/unregister",
+        helper.verifyReq({ device_uuid: "string", sensor_uuid: "string" }),
+        helper.getDevice(orm),
+        async (req, res) => {
+            let body: SensorUnregisterProps = req.body;
+            let device: Device = res.locals.device;
+            await device.sensors.init({
+                where: {
+                    sensor_uuid: body.sensor_uuid,
+                },
+            });
+
+            let sensor = device.sensors.getItems().pop();
+            if (!sensor) {
+                return helper.badRequest(res, "no sensor with given uuid is registered on this device");
+            }
+            try {
+                await orm.em.removeAndFlush(sensor);
+            } catch (err) {
+                return helper.error(500, res, "could not unregister sensor");
+            }
+
+            let worker = dispatcher.findWorker(device.device_uuid);
+            if (worker) {
+                // exception can basically be thrown only when removing redis history
+                try {
+                    await worker.removeSensor(body.sensor_uuid, {
+                        removeRedisHistory: true,
+                    });
+                } catch (err) {
+                    // so don't signalize error if it fails
+                    console.error(err.message);
+                }
+            }
+
+            return res.json({
+                error: false,
+            });
+        }
+    );
+
     return router;
 };
 
@@ -203,6 +245,15 @@ const sensorListProps = {
 
 interface SensorListProps {
     device_uuid: string;
+}
+
+const sensorUnregisterProps = {
+    device_uuid: "string",
+    sensor_uuid: "string",
+};
+interface SensorUnregisterProps {
+    device_uuid: string;
+    sensor_uuid: string;
 }
 
 const sensorRegistrationProps = {
