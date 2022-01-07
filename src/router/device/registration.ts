@@ -5,6 +5,7 @@ import { Device } from "../../entities/Device";
 import { helper } from "..";
 import { Registration, RegistrationResponse, RegistrationProps } from "../../api";
 import { Dispatcher } from "../../dispatcher";
+import { areRegistrationPropsValid } from ".";
 
 export const registrationProps = {
     ip: "string",
@@ -18,8 +19,9 @@ export const registrationRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, d
     router.post("/register", helper.verifyReq(registrationProps), async (req, res) => {
         let body: RegistrationProps = req.body;
 
-        if (!isIPv4(body.ip)) {
-            return helper.badRequest(res, "invalid ip address");
+        let areValid = areRegistrationPropsValid(body);
+        if (areValid !== true) {
+            return helper.badRequest(res, areValid);
         }
 
         let device!: Device;
@@ -37,10 +39,10 @@ export const registrationRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, d
             });
         }
 
-        return res.json({
+        return res.status(201).json({
             error: false,
             // id of newly created device
-            device_id: device.device_uuid,
+            device_uuid: device.device_uuid,
         });
     });
 

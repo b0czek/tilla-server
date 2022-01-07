@@ -133,7 +133,7 @@ export const sensorRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, dispatc
         }
         worker.addSensor(sensor);
 
-        return res.json({
+        return res.status(201).json({
             error: false,
             sensor_uuid: sensor.sensor_uuid,
         });

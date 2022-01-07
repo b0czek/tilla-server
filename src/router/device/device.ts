@@ -5,7 +5,7 @@ import { helper } from "..";
 import { Device } from "../../entities/Device";
 import { registrationProps } from "./registration";
 import { Dispatcher } from "../../dispatcher";
-import { isIPv4 } from "net";
+import { areRegistrationPropsValid } from ".";
 
 export const deviceEndpoints = (orm: MikroORM<IDatabaseDriver<Connection>>, dispatcher: Dispatcher) => {
     const router = express.Router();
@@ -25,9 +25,9 @@ export const deviceEndpoints = (orm: MikroORM<IDatabaseDriver<Connection>>, disp
     });
 
     router.post("/edit", helper.verifyReq(deviceEditProps, true), helper.getDevice(orm), async (req, res) => {
-        let device: Device = res.locals.device;
+        let device: DeviceEditProps = res.locals.device;
 
-        const changedFields = Object.fromEntries(
+        const changedFields: Partial<DeviceEditProps> = Object.fromEntries(
             Object.entries(res.locals.object).filter(([key, value]) => value !== device![<keyof typeof device>key])
         );
 
@@ -35,13 +35,14 @@ export const deviceEndpoints = (orm: MikroORM<IDatabaseDriver<Connection>>, disp
             return helper.badRequest(res, "no field was changed");
         }
 
+        let areValid = areRegistrationPropsValid(device);
+        if (areValid !== true) {
+            return helper.badRequest(res, areValid);
+        }
+
         if ("ip" in changedFields) {
-            let ip = <string>changedFields.ip;
-            if (!isIPv4(<string>ip)) {
-                return helper.badRequest(res, "invalid ip address");
-            }
             let sameDeviceIP = await orm.em.count(Device, {
-                ip,
+                ip: changedFields.ip,
             });
             if (sameDeviceIP != 0) {
                 return helper.badRequest(res, "there is already device with the same ip address");
@@ -71,7 +72,7 @@ export const deviceEndpoints = (orm: MikroORM<IDatabaseDriver<Connection>>, disp
     return router;
 };
 
-interface DeviceEditProps extends RegistrationProps {
+export interface DeviceEditProps extends RegistrationProps {
     device_uuid: string;
 }
 
