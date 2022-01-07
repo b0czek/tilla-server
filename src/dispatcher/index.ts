@@ -26,6 +26,10 @@ export class Dispatcher {
         }
     };
 
+    public close() {
+        this.workers.forEach((worker) => worker.stop());
+    }
+
     public findWorker = (device_uuid: string) => this.workers.find((worker) => worker.uuid == device_uuid);
 
     /**

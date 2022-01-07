@@ -4,9 +4,22 @@ import express from "express";
 import { apiRouter } from "./router";
 import { Dispatcher, RedisClient } from "./dispatcher";
 import { createClient } from "redis";
+import { Server } from "http";
 
-const main = async () => {
-    let orm = await MikroORM.init(config);
+const appListen = (app: ReturnType<typeof express>, port: number) => {
+    return new Promise<Server>((resolve, reject) => {
+        try {
+            const server = app.listen(port, () => {
+                resolve(server);
+            });
+        } catch (err) {
+            reject(err);
+        }
+    });
+};
+
+export const main = async (port: number) => {
+    const orm = await MikroORM.init(config);
     await orm.getMigrator().up();
 
     const app = express();
@@ -19,10 +32,17 @@ const main = async () => {
 
     app.use("/api", apiRouter(orm, dispatcher));
 
-    const port = 3000;
-    app.listen(port, () => {
-        console.log(`server started on ${port}`);
-    });
+    const server = await appListen(app, port);
+    // testing purposes
+    return {
+        orm,
+        server,
+        app,
+        redisClient,
+        dispatcher,
+    };
 };
 
-main();
+if (require.main === module) {
+    main(3000);
+}

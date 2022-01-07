@@ -26,8 +26,7 @@ export class DispatcherWorker {
         for (let sensor of device.sensors.getItems()) {
             this._initSensorData(sensor);
         }
-        setImmediate(async () => await this._pollDevice());
-        this.pollInterval = setInterval(this._pollDevice, this.device.polling_interval);
+        this._restartInterval();
     }
 
     public findSensor = (sensor_uuid: string) =>
@@ -54,6 +53,8 @@ export class DispatcherWorker {
     public addSensor(sensor: Sensor) {
         console.log(`adding sensor ${sensor.sensor_uuid}`);
         this._initSensorData(sensor);
+        this._pollDevice();
+        this._restartInterval();
     }
     /**
      * function updating sensor's data, data must be valid - worker does not have access to database to validate it
@@ -172,6 +173,14 @@ export class DispatcherWorker {
             sensor,
             data: this._getErroredSensorData(),
         });
+    }
+
+    private _restartInterval() {
+        if (this.pollInterval) {
+            clearInterval(this.pollInterval);
+        }
+        setImmediate(async () => await this._pollDevice());
+        this.pollInterval = setInterval(this._pollDevice, this.device.polling_interval);
     }
 }
 

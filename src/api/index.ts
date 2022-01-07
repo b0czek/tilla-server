@@ -30,6 +30,7 @@ export abstract class QueryApi {
                 let req = await fetch(url, {
                     method: this.method,
                     body: typeof params.body === "string" ? params.body : JSON.stringify(params.body),
+                    timeout: 5000,
                 });
                 if (Math.floor(req.status / 100) != 2) {
                     reject(await req.text());
