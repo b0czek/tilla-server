@@ -18,7 +18,7 @@ export const areRegistrationPropsValid = (props: RegistrationProps): string | tr
 
 export const deviceRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, dispatcher: Dispatcher) => {
     const router = Router();
-    router.use("/registration", registrationRouter(orm, dispatcher));
+    router.use("/", registrationRouter(orm, dispatcher));
     router.use("/", deviceEndpoints(orm, dispatcher));
     return router;
 };

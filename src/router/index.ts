@@ -1,7 +1,7 @@
 import { Connection, IDatabaseDriver, MikroORM } from "@mikro-orm/core";
 import express, { Router, Request, Response, NextFunction } from "express";
 import { deviceRouter } from "./device";
-import { sensorRouter } from "./drivers/sensors";
+import { sensorRouter } from "./sensors/sensors";
 import { queryParser } from "express-query-parser";
 import { Device } from "../entities/Device";
 import { Dispatcher } from "../dispatcher";

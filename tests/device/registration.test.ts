@@ -1,6 +1,6 @@
 import request from "supertest";
 import { uuidRegex } from "../common";
-import { registrationUri, req, registerDevice, unregisterDevice } from "./device.common";
+import { registrationUri, req, registerDevice, unregisterDevice, unregistrationUri } from "./device.common";
 describe("/device/registration/register endpoint test", () => {
     it("tests /register empty body", async () => {
         const response = await req.post(registrationUri).send({});
@@ -80,5 +80,25 @@ describe("/device/registration/register endpoint test", () => {
         const response = await registerDevice("10.100.20.200");
         expect(response.statusCode).toEqual(503);
         expect(response.body.error).toEqual(true);
+    });
+});
+describe("/device/registration/unregister endpoint test", () => {
+    it("tests empty body response", async () => {
+        const response = await req.post(unregistrationUri).send({});
+        expect(response.statusCode).toEqual(400);
+        expect(response.body.error).toEqual(true);
+    });
+    it("tests non-existent device removal", async () => {
+        const response = await unregisterDevice("non-existent uuid");
+        expect(response.statusCode).toEqual(400);
+        expect(response.body.error).toEqual(true);
+    });
+    it("unregistration of device", async () => {
+        const registration = await registerDevice();
+        expect(registration.statusCode).toEqual(201);
+
+        const response = await unregisterDevice(registration.body.device_uuid);
+        expect(response.statusCode).toEqual(200);
+        expect(response.body.error).toEqual(false);
     });
 });
