@@ -5,7 +5,7 @@ import { sensorRouter } from "./sensors/sensors";
 import { queryParser } from "express-query-parser";
 import { Device } from "../entities/Device";
 import { Dispatcher } from "../dispatcher";
-
+import cors from "cors";
 const error = (code: number, res: Response, message: string, additionalFields?: { [key: string]: any }) => {
     return res.status(code).json({
         error: true,
@@ -112,7 +112,8 @@ export const apiRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, dispatcher
             parseBoolean: true,
             parseNumber: true,
         }),
-        express.json()
+        express.json(),
+        cors()
     );
     router.use("/device", deviceRouter(orm, dispatcher));
     router.use("/sensors", sensorRouter(orm, dispatcher));

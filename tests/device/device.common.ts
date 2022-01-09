@@ -1,8 +1,7 @@
 import request from "supertest";
-import { deviceIP } from "../common";
+import { deviceIP, req } from "../common";
 import { DeviceEditProps } from "../../src/router/device/device";
 
-export const req = request.agent("http://localhost:3050");
 export const registrationUri = "/api/device/register";
 export const unregistrationUri = "/api/device/unregister";
 export const listDevicesUri = "/api/device/list";

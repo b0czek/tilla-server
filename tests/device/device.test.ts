@@ -1,6 +1,6 @@
 import { DeviceEditProps } from "../../src/router/device/device";
-import { deviceIP } from "../common";
-import { editDevice, editDeviceUri, getDeviceList, registerDevice, req, unregisterDevice } from "./device.common";
+import { deviceIP, req } from "../common";
+import { editDevice, editDeviceUri, getDeviceList, registerDevice, unregisterDevice } from "./device.common";
 
 describe("/device/list endpoint test", () => {
     it("responds properly", async () => {

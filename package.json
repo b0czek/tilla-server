@@ -7,7 +7,7 @@
     "scripts": {
         "build": "tsc",
         "start": "tsc && node dist/main.js",
-        "watch": "nodemon src/main.ts",
+        "watch": "nodemon src/main.ts --watch 'src/**/*'",
         "migrate": "mikro-orm migration:create --initial",
         "test": "jest --runInBand"
     },

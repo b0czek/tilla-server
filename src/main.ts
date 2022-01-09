@@ -44,5 +44,5 @@ export const main = async (port: number) => {
 };
 
 if (require.main === module) {
-    main(3000);
+    main(3001);
 }

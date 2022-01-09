@@ -1,6 +1,6 @@
 import request from "supertest";
-import { uuidRegex } from "../common";
-import { registrationUri, req, registerDevice, unregisterDevice, unregistrationUri } from "./device.common";
+import { req, uuidRegex } from "../common";
+import { registrationUri, registerDevice, unregisterDevice, unregistrationUri } from "./device.common";
 describe("/device/registration/register endpoint test", () => {
     it("tests /register empty body", async () => {
         const response = await req.post(registrationUri).send({});
