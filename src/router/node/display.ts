@@ -76,7 +76,7 @@ export const displayRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, dispat
     router.get("/info", helper.verifyReq(nodeReqBody), helper.getDevice(orm), async (req, res) => {
         let device: Device = res.locals.device;
         if (device.auth_key !== req.query.auth_key) {
-            helper.badRequest(res, "invalid auth key");
+            return helper.badRequest(res, "invalid auth key");
         }
         await device.remote_sensors.init();
         let remoteSensors = device.remote_sensors.getItems();
