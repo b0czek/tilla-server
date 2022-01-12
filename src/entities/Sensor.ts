@@ -1,6 +1,7 @@
-import { Entity, Property, PrimaryKey, ManyToOne } from "@mikro-orm/core";
+import { Entity, Property, PrimaryKey, ManyToOne, OneToMany, Cascade, Collection } from "@mikro-orm/core";
 import crypto from "crypto";
 import { Device } from "./Device";
+import { RemoteSensor } from "./RemoteSensor";
 
 @Entity()
 export class Sensor {
@@ -28,4 +29,7 @@ export class Sensor {
 
     @ManyToOne(() => Device)
     device!: Device;
+
+    @OneToMany(() => RemoteSensor, (remote_sensor) => remote_sensor.sensor, { cascade: [Cascade.ALL] })
+    subscribers = new Collection<RemoteSensor>(this);
 }

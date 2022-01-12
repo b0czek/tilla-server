@@ -19,6 +19,7 @@ describe("/device/list endpoint test", () => {
         for (let device of response.body.devices) {
             expect(device.auth_key).toBeUndefined();
             expect(device.sensors).toBeUndefined();
+            expect(device.remote_sensors).toBeUndefined();
             expect(device.id).toBeUndefined();
         }
         await unregisterDevice(registration.body.device_uuid);

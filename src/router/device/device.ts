@@ -14,7 +14,7 @@ export const deviceEndpoints = (orm: MikroORM<IDatabaseDriver<Connection>>, disp
         try {
             let devices = await orm.em.find(Device, {});
 
-            let omitted = helper.omitFields(devices, ["id", "sensors", "auth_key"] as const);
+            let omitted = helper.omitFields(devices, ["id", "sensors", "auth_key", "remote_sensors"] as const);
             res.json({
                 error: false,
                 devices: omitted,

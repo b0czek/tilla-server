@@ -1,6 +1,7 @@
 import { Entity, Property, PrimaryKey, OneToMany, Collection, Cascade } from "@mikro-orm/core";
 
 import crypto from "crypto";
+import { RemoteSensor } from "./RemoteSensor";
 import { Sensor } from "./Sensor";
 @Entity()
 export class Device {
@@ -21,6 +22,9 @@ export class Device {
 
     @OneToMany(() => Sensor, (sensor) => sensor.device, { cascade: [Cascade.ALL] })
     sensors = new Collection<Sensor>(this);
+
+    @OneToMany(() => RemoteSensor, (remote_sensor) => remote_sensor.device, { cascade: [Cascade.ALL] })
+    remote_sensors = new Collection<RemoteSensor>(this);
 
     @Property({ type: "date" })
     registration_date = new Date();
