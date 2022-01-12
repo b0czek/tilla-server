@@ -33,7 +33,7 @@ export const main = async (port: number) => {
     app.use("/api", apiRouter(orm, dispatcher));
 
     const server = await appListen(app, port);
-    // testing purposes
+    // for testing purposes
     return {
         orm,
         server,

@@ -81,7 +81,7 @@ export const sensorRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, dispatc
         }
         let age = <number>(<any>req.query.age) ?? +Date.now();
 
-        let samples = (await worker.getSamples(sensor, age)).map((sample) => <Sample>JSON.parse(sample));
+        let samples = await worker.getSamples(sensor, age);
 
         return res.json({
             error: false,

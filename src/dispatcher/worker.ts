@@ -2,8 +2,7 @@ import { ISensorData, ISensorsInfo, Sensors } from "../api";
 import { Sensor } from "../entities/Sensor";
 import { Device } from "../entities/Device";
 import { RedisClient } from ".";
-
-const RETRY_COUNT = 3;
+import { Config } from "../config";
 
 interface ISensor {
     data: ISensorData;
@@ -32,12 +31,12 @@ export class DispatcherWorker {
     public findSensor = (sensor_uuid: string) =>
         this.sensorsData.find((sensorData) => sensorData.sensor.sensor_uuid == sensor_uuid);
 
-    public async getSamples(sensor: ISensor, age = +Date.now()) {
+    public async getSamples(sensor: ISensor, age = +Date.now()): Promise<Sample[]> {
         let now = +Date.now();
         await this._removeOldEntries(sensor);
         let since = now - age;
-        console.log(since);
-        return this.redisClient.zRangeByScore(sensor.sensor.sensor_uuid, since, now);
+        let samples = await this.redisClient.zRangeByScore(sensor.sensor.sensor_uuid, since, now);
+        return samples.map((sample) => JSON.parse(sample));
     }
 
     public stop() {
@@ -53,7 +52,6 @@ export class DispatcherWorker {
     public addSensor(sensor: Sensor) {
         console.log(`adding sensor ${sensor.sensor_uuid}`);
         this._initSensorData(sensor);
-        this._pollDevice();
         this._restartInterval();
     }
     /**
@@ -87,7 +85,7 @@ export class DispatcherWorker {
             return;
         }
         let data!: ISensorsInfo;
-        for (let i = 0; i < RETRY_COUNT && !data; i++) {
+        for (let i = 0; i < Config.Dispatcher.Worker.pollRetryCount && !data; i++) {
             try {
                 data = await Sensors.Data.fetch({
                     auth_key: this.device.auth_key,
@@ -109,6 +107,7 @@ export class DispatcherWorker {
             if (sensorData === null) {
                 this._errorSensor(sensor);
             } else {
+                sensorData = this._formatSensorData(sensorData);
                 console.log(`${sensor.sensor.sensor_uuid}: ${JSON.stringify(sensorData)}`);
                 sensor.data = sensorData;
                 await this._addSample(sensor, sensorData);
@@ -168,6 +167,18 @@ export class DispatcherWorker {
         };
     }
 
+    private _formatSensorData(data: ISensorData): ISensorData {
+        const fields = ["temperature", "humidity", "pressure"];
+        for (let field of fields) {
+            let d = <keyof typeof data>field;
+            if (d in data) {
+                data[d] = round(data[d]!);
+            }
+        }
+
+        return data;
+    }
+
     private _initSensorData(sensor: Sensor) {
         this.sensorsData.push({
             sensor,
@@ -183,6 +194,11 @@ export class DispatcherWorker {
         this.pollInterval = setInterval(this._pollDevice, this.device.polling_interval);
     }
 }
+
+const round = (num: number) => {
+    var m = Number((Math.abs(num) * 100).toPrecision(15));
+    return (Math.round(m) / 100) * Math.sign(num);
+};
 
 export interface SensorRemoveOptions {
     removeRedisHistory: boolean;
