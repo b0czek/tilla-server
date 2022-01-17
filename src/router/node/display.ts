@@ -4,6 +4,7 @@ import { Dispatcher, Sample } from "../../dispatcher";
 import { Device } from "../../entities/Device";
 import { helper } from "..";
 import { RemoteSensor } from "../../entities/RemoteSensor";
+import { ISensorData } from "src/api";
 
 interface OptimizedSample extends Omit<Sample, "timestamp"> {
     count: number;
@@ -89,17 +90,50 @@ export const displayRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, dispat
                 remote_sensor_uuid: remoteSensor.remote_sensor_uuid,
                 polling_interval: remoteSensor.polling_interval,
                 max_sample_age: remoteSensor.max_sample_age,
+                sample_count: Math.floor(remoteSensor.max_sample_age / remoteSensor.device.polling_interval),
             };
         });
 
         return res.json({
             error: false,
-            sensors_data,
+            sensors: sensors_data,
+        });
+    });
+
+    router.get("/data", helper.verifyReq(nodeReqBody), helper.getDevice(orm), async (req, res) => {
+        let device: Device = res.locals.device;
+        if (device.auth_key !== req.query.auth_key) {
+            return helper.badRequest(res, "invalid auth key");
+        }
+        let remoteSensors = (await device.remote_sensors.init()).getItems();
+
+        let sensors: { [key: string]: ISensorData } = {};
+
+        for (let remoteSensor of remoteSensors) {
+            let worker = dispatcher.findWorker(remoteSensor.sensor.device.device_uuid);
+            if (!worker) {
+                return helper.badRequest(res, "no remote device of given uuid dispatched");
+            }
+            let sensor = worker.findSensor(remoteSensor.sensor.sensor_uuid);
+            if (!sensor) {
+                return helper.badRequest(res, "no remote sensor of given uuid dispatched");
+            }
+
+            sensors[remoteSensor.remote_sensor_uuid] = sensor.data;
+        }
+
+        return res.json({
+            error: false,
+            sensors,
         });
     });
 
     router.get("/sync", helper.verifyReq(nodeReqBody), helper.getDevice(orm), async (req, res) => {
         let device: Device = res.locals.device;
+
+        if (device.auth_key !== req.query.auth_key) {
+            return helper.badRequest(res, "invalid auth key");
+        }
 
         let since = req.query.since ?? 0;
         if (typeof since !== "number") {
@@ -134,14 +168,20 @@ export const displayRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, dispat
 
             try {
                 let samples = await worker.getSamples(sensor, age);
-                let compressedSamples = optimizeSamples(samples);
-                sensors[remoteSensor.remote_sensor_uuid] = compressedSamples;
+                let optimizedSamples = optimizeSamples(samples);
+                sensors[remoteSensor.remote_sensor_uuid] = {
+                    ...optimizedSamples,
+                    device_online: worker.online,
+                };
             } catch (err) {
                 console.error(err.message);
                 sensors[remoteSensor.remote_sensor_uuid] = { error: true };
             }
         }
-        return res.json(sensors);
+        return res.json({
+            error: false,
+            sensors,
+        });
     });
 
     return router;

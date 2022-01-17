@@ -6,6 +6,7 @@ import { registrationRouter } from "./registration";
 import { RegistrationProps } from "../../api";
 import { isIPv4 } from "net";
 import { remoteRouter } from "./remote";
+import { deviceInfoRouter } from "./info";
 
 export const areRegistrationPropsValid = (props: RegistrationProps): string | true => {
     if (!isIPv4(props.ip)) {
@@ -22,5 +23,6 @@ export const deviceRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, dispatc
     router.use("/", registrationRouter(orm, dispatcher));
     router.use("/", deviceEndpoints(orm, dispatcher));
     router.use("/remote", remoteRouter(orm, dispatcher));
+    router.use("/info", deviceInfoRouter(orm, dispatcher));
     return router;
 };
