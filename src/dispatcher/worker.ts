@@ -81,9 +81,10 @@ export class DispatcherWorker {
     }
 
     private _pollDevice = async () => {
-        if (this.sensorsData.length == 0) {
-            return;
-        }
+        // actually don't skip devices with no sensors, gather is device online info
+        // if (this.sensorsData.length == 0) {
+        //     return;
+        // }
         let data!: ISensorsInfo;
         for (let i = 0; i < Config.Dispatcher.Worker.pollRetryCount && !data; i++) {
             try {

@@ -8,7 +8,7 @@ export class RemoteSensor {
     @PrimaryKey()
     id!: number;
 
-    @Property({ unique: true })
+    @Property({ unique: true, index: true })
     remote_sensor_uuid = randomUUID();
 
     // how often should the device sync for changes in [ms]

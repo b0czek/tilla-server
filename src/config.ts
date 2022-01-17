@@ -8,6 +8,7 @@ export const Config = {
     },
     Node: {
         // what ip address should nodes use to communicate back to server
-        callbackHost: "192.168.1.48:3001",
+        callbackHost: "192.168.1.48",
+        callbackPort: 3001,
     },
 } as const;

@@ -9,6 +9,7 @@ interface RegistrationParams extends QueryParams {
         auth_key: string;
         device_uuid: string;
         callback_host: string;
+        callback_port: number;
     };
 }
 
@@ -46,6 +47,7 @@ class RegistrationRegister extends QueryApi {
                 auth_key: key,
                 device_uuid: uuid,
                 callback_host: Config.Node.callbackHost,
+                callback_port: Config.Node.callbackPort,
             },
         });
 

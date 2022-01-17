@@ -8,7 +8,7 @@ export class Device {
     @PrimaryKey()
     id!: number;
 
-    @Property({ type: "string", unique: true })
+    @Property({ type: "string", unique: true, index: true })
     device_uuid: string = crypto.randomUUID();
 
     @Property({ type: "string" })

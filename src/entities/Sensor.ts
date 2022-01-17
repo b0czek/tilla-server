@@ -8,7 +8,7 @@ export class Sensor {
     @PrimaryKey()
     id!: number;
 
-    @Property({ unique: true })
+    @Property({ unique: true, index: true })
     sensor_uuid: string = crypto.randomUUID();
 
     @Property()
