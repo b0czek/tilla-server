@@ -81,6 +81,29 @@ export const registrationRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, d
             error: false,
         });
     });
+    // device unregistration without unregistering process on device itself
+    router.post("/delete", helper.verifyReq(unregisterReqBody), helper.getDevice(orm), async (req, res) => {
+        try {
+            await orm.em.removeAndFlush(res.locals.device);
+        } catch (err) {
+            console.error(err);
+
+            return helper.error(500, res, "device unregistered but could not be removed from database");
+        }
+
+        try {
+            await dispatcher.removeWorker(res.locals.device.device_uuid, {
+                removeRedisHistory: true,
+            });
+        } catch (err) {
+            console.error(err);
+            return helper.error(500, res, "device unregistered but device worker could not be unregistered");
+        }
+
+        return res.json({
+            error: false,
+        });
+    });
 
     return router;
 };
