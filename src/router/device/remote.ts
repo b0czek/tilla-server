@@ -52,7 +52,7 @@ export const remoteRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, dispatc
                 return helper.badRequest(res, "max sample age cannot be greater than sensor's buffer expiration time");
             }
             let remoteSensor = orm.em.create(RemoteSensor, {
-                device: remoteDevice,
+                device: device,
                 sensor: sensor,
                 polling_interval: props.polling_interval,
                 max_sample_age: props.max_sample_age,

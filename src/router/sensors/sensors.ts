@@ -19,7 +19,7 @@ export const sensorRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, dispatc
             });
             return res.json({
                 error: false,
-                ...data,
+                sensors: data,
             });
         } catch (err) {
             return helper.error(503, res, "could not retrieve sensor list");
