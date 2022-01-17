@@ -1,7 +1,7 @@
 import { ISensorData, ISensorsInfo, Sensors } from "../api";
 import { Sensor } from "../entities/Sensor";
 import { Device } from "../entities/Device";
-import { RedisClient } from ".";
+import { sensorFields, RedisClient } from ".";
 import { Config } from "../config";
 
 interface ISensor {
@@ -169,8 +169,7 @@ export class DispatcherWorker {
     }
 
     private _formatSensorData(data: ISensorData): ISensorData {
-        const fields = ["temperature", "humidity", "pressure"];
-        for (let field of fields) {
+        for (let field of sensorFields) {
             let d = <keyof typeof data>field;
             if (d in data) {
                 data[d] = round(data[d]!);

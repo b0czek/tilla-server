@@ -5,6 +5,8 @@ import { DispatcherWorker } from "./worker";
 
 export type RedisClient = ReturnType<typeof createClient>;
 
+export const sensorFields = ["temperature", "humidity", "pressure"] as const;
+
 export class Dispatcher {
     private orm: MikroORM<IDatabaseDriver<Connection>>;
     private redisClient: RedisClient;

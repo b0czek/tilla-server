@@ -17,6 +17,21 @@ const error = (code: number, res: Response, message: string, additionalFields?: 
 const badRequest = (res: Response, message = "invalid request") => error(400, res, message);
 
 /**
+ * function veryfing object for including given keys
+ * @param requiredFields object with declarations of required fields and their type, `{ id: "string"}`
+ * @param object object to check in
+ * @returns true if object is valid, invalid field name if invalid
+ */
+const verifyObject = (requiredFields: RequiredFields, object: { [key: string]: any }) => {
+    for (const [field, type] of Object.entries(requiredFields)) {
+        if (!(field in object) || typeof object[field] !== type) {
+            return field;
+        }
+    }
+    return true;
+};
+
+/**
  * function returning middleware verifying provided data, according to method.
  * @param requiredFields object with declarations of required fields, in example: `{ id: "string"}`
  * @param buildObjectFromRequiredFields whether to build object from required and required only fields and put it in `res.locals.object`
@@ -35,12 +50,11 @@ const verifyReq = (requiredFields: RequiredFields, buildObjectFromRequiredFields
         if (!fields) {
             return badRequest(res);
         }
-
-        for (const [field, type] of Object.entries(requiredFields)) {
-            if (!(field in fields) || typeof fields[field] !== type) {
-                return badRequest(res, `invalid field '${field}'`);
-            }
+        let valid = verifyObject(requiredFields, fields);
+        if (valid !== true) {
+            return badRequest(res, `invalid field '${valid}'`);
         }
+
         if (buildObjectFromRequiredFields) {
             res.locals.object = Object.fromEntries(
                 Object.entries(requiredFields).map(([key, _]) => [key, fields[key]])
@@ -100,6 +114,7 @@ export const helper = {
     error,
     badRequest,
     verifyReq,
+    verifyObject,
     getDevice,
     omitFields,
 };

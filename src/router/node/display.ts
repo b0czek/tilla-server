@@ -1,6 +1,6 @@
 import { Connection, IDatabaseDriver, MikroORM } from "@mikro-orm/core";
 import { Router } from "express";
-import { Dispatcher, Sample } from "../../dispatcher";
+import { Dispatcher, Sample, sensorFields } from "../../dispatcher";
 import { Device } from "../../entities/Device";
 import { helper } from "..";
 import { RemoteSensor } from "../../entities/RemoteSensor";
@@ -9,17 +9,17 @@ import { ISensorData } from "src/api";
 interface OptimizedSample extends Omit<Sample, "timestamp"> {
     count: number;
 }
-const allValueFields = ["temperature", "humidity", "pressure"] as const;
+type IncludedFields = Readonly<Array<typeof sensorFields[number]>>;
 
 const didValuesChange = (
     roundedSample: Sample,
     prevSample: OptimizedSample,
-    fieldsToConsider = allValueFields
+    fieldsToConsider: IncludedFields = sensorFields
 ): boolean => fieldsToConsider.filter((field) => roundedSample[field] !== prevSample[field]).length > 0;
 
 const calculateAge = (since: number, max_sample_age: number) => Math.min(max_sample_age, +Date.now() - since);
 
-const roundValues = (sample: Sample, fieldsToRound = allValueFields): Sample => {
+const roundValues = (sample: Sample, fieldsToRound: IncludedFields = sensorFields): Sample => {
     fieldsToRound.forEach((field) => {
         if (field in sample && sample[field]) {
             sample[field] = Math.round(sample[field]!);
@@ -29,15 +29,17 @@ const roundValues = (sample: Sample, fieldsToRound = allValueFields): Sample => 
     return sample;
 };
 
-const createOptimizedSample = (sample: Sample): OptimizedSample => {
+const createOptimizedSample = (sample: Sample, includedFields: IncludedFields = sensorFields): OptimizedSample => {
     let { timestamp, ...data } = sample;
+    let fields = Object.fromEntries(includedFields.map((field) => [field, data[field]]));
     return {
-        ...data,
+        error: data.error,
+        ...fields,
         count: 1,
     };
 };
 
-const optimizeSamples = (data: Sample[]) => {
+const optimizeSamples = (data: Sample[], includedFields: IncludedFields = sensorFields) => {
     if (data.length === 0) {
         throw new Error("cannot optimize empty dataset");
     }
@@ -45,16 +47,16 @@ const optimizeSamples = (data: Sample[]) => {
     let result: OptimizedSample[] = [];
 
     for (const sample of data) {
-        let roundedSample = roundValues(sample);
+        let roundedSample = roundValues(sample, includedFields);
         if (result.length === 0) {
-            result.push(createOptimizedSample(roundedSample));
+            result.push(createOptimizedSample(roundedSample, includedFields));
             continue;
         }
         // there will always be at least one element in result at this point
         let prevSample = result.at(-1)!;
 
-        if (sample.error != prevSample.error || didValuesChange(roundedSample, prevSample)) {
-            result.push(createOptimizedSample(roundedSample));
+        if (sample.error != prevSample.error || didValuesChange(roundedSample, prevSample, includedFields)) {
+            result.push(createOptimizedSample(roundedSample, includedFields));
         } else {
             prevSample.count++;
         }
@@ -81,18 +83,23 @@ export const displayRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, dispat
         }
         await device.remote_sensors.init();
         let remoteSensors = device.remote_sensors.getItems();
-
-        let sensors_data = remoteSensors.map((remoteSensor) => {
-            return {
-                device_name: remoteSensor.sensor.device.name,
-                sensor_name: remoteSensor.sensor.name,
-                sensor_type: remoteSensor.sensor.type,
-                remote_sensor_uuid: remoteSensor.remote_sensor_uuid,
-                polling_interval: remoteSensor.polling_interval,
-                max_sample_age: remoteSensor.max_sample_age,
-                sample_count: Math.floor(remoteSensor.max_sample_age / remoteSensor.device.polling_interval),
-            };
-        });
+        let sensors_data = await Promise.all(
+            remoteSensors.map(async (remoteSensor) => {
+                let sensorFields = (await remoteSensor.fields.init())
+                    .getItems()
+                    .map((field) => helper.omitFields(field, ["id", "remote_sensor"] as const));
+                return {
+                    device_name: remoteSensor.sensor.device.name,
+                    sensor_name: remoteSensor.sensor.name,
+                    sensor_type: remoteSensor.sensor.type,
+                    remote_sensor_uuid: remoteSensor.remote_sensor_uuid,
+                    polling_interval: remoteSensor.polling_interval,
+                    max_sample_age: remoteSensor.max_sample_age,
+                    sample_count: Math.floor(remoteSensor.max_sample_age / remoteSensor.device.polling_interval),
+                    fields: sensorFields,
+                };
+            })
+        );
 
         return res.json({
             error: false,
@@ -110,6 +117,10 @@ export const displayRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, dispat
         let sensors: { [key: string]: ISensorData } = {};
 
         for (let remoteSensor of remoteSensors) {
+            let sensorFieldNames = (await remoteSensor.fields.init())
+                .getItems()
+                .map((field) => <keyof ISensorData>field.name);
+
             let worker = dispatcher.findWorker(remoteSensor.sensor.device.device_uuid);
             if (!worker) {
                 return helper.badRequest(res, "no remote device of given uuid dispatched");
@@ -118,8 +129,11 @@ export const displayRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, dispat
             if (!sensor) {
                 return helper.badRequest(res, "no remote sensor of given uuid dispatched");
             }
-
-            sensors[remoteSensor.remote_sensor_uuid] = sensor.data;
+            let data = Object.fromEntries(sensorFieldNames.map((fieldName) => [fieldName, sensor!.data[fieldName]]));
+            sensors[remoteSensor.remote_sensor_uuid] = {
+                ...data,
+                error: sensor.data.error,
+            };
         }
 
         return res.json({
@@ -167,11 +181,18 @@ export const displayRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, dispat
             let age = calculateAge(since, remoteSensor.max_sample_age);
 
             try {
+                let sensorFieldNames = (await remoteSensor.fields.init())
+                    .getItems()
+                    .map((field) => <typeof sensorFields[number]>field.name);
+
                 let samples = await worker.getSamples(sensor, age);
-                let optimizedSamples = optimizeSamples(samples);
+                let optimizedSamples = optimizeSamples(samples, sensorFieldNames);
                 sensors[remoteSensor.remote_sensor_uuid] = {
-                    ...optimizedSamples,
                     device_online: worker.online,
+                    currentValues: Object.fromEntries(
+                        sensorFieldNames.map((fieldName) => [fieldName, sensor!.data[fieldName]])
+                    ),
+                    ...optimizedSamples,
                 };
             } catch (err) {
                 console.error(err.message);
