@@ -161,6 +161,7 @@ const remoteSensorFieldProps = {
     name: "string",
     label: "string",
     color: "string",
+    unit: "string",
     priority: "number",
     range_min: "number",
     range_max: "number",
@@ -170,6 +171,7 @@ interface RemoteSensorFieldProps {
     name: typeof sensorFields[number];
     label: string;
     color: string;
+    unit: string;
     priority: number;
     range_min: number;
     range_max: number;

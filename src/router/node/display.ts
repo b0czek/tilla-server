@@ -187,9 +187,11 @@ export const displayRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, dispat
 
                 let samples = await worker.getSamples(sensor, age);
                 let optimizedSamples = optimizeSamples(samples, sensorFieldNames);
+
                 sensors[remoteSensor.remote_sensor_uuid] = {
                     device_online: worker.online,
-                    currentValues: Object.fromEntries(
+                    new_samples_count: samples.length,
+                    current_values: Object.fromEntries(
                         sensorFieldNames.map((fieldName) => [fieldName, sensor!.data[fieldName]])
                     ),
                     ...optimizedSamples,

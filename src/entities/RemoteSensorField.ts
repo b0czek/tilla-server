@@ -25,6 +25,9 @@ export class RemoteSensorField {
     @Property()
     color: number;
 
+    @Property()
+    unit: string;
+
     // priority of the field, in which order they should field be displayed and which chart should it occupy
     @Property()
     priority: number;
