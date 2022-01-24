@@ -83,11 +83,13 @@ export const displayRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, dispat
         }
         await device.remote_sensors.init();
         let remoteSensors = device.remote_sensors.getItems();
+
         let sensors_data = await Promise.all(
             remoteSensors.map(async (remoteSensor) => {
                 let sensorFields = (await remoteSensor.fields.init())
                     .getItems()
                     .map((field) => helper.omitFields(field, ["id", "remote_sensor"] as const));
+
                 return {
                     device_name: remoteSensor.sensor.device.name,
                     sensor_name: remoteSensor.sensor.name,
@@ -95,7 +97,7 @@ export const displayRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, dispat
                     remote_sensor_uuid: remoteSensor.remote_sensor_uuid,
                     polling_interval: remoteSensor.polling_interval,
                     max_sample_age: remoteSensor.max_sample_age,
-                    sample_count: Math.floor(remoteSensor.max_sample_age / remoteSensor.device.polling_interval),
+                    sample_count: Math.floor(remoteSensor.max_sample_age / remoteSensor.sensor.device.polling_interval),
                     fields: sensorFields,
                 };
             })
