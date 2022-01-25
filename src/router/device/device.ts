@@ -1,11 +1,13 @@
 import { Connection, IDatabaseDriver, MikroORM } from "@mikro-orm/core";
-import express from "express";
+import express, { Request, Response } from "express";
 import { RegistrationProps } from "../../api";
 import { helper } from "..";
 import { Device } from "../../entities/Device";
-import { registrationProps } from "./registration";
+import { registrationSchema } from "./registration";
 import { Dispatcher } from "../../dispatcher";
 import { areRegistrationPropsValid } from ".";
+import { checkSchema } from "express-validator";
+import validators, { objectFromSchema, rejectIfBadRequest } from "../validators";
 
 export const deviceEndpoints = (orm: MikroORM<IDatabaseDriver<Connection>>, dispatcher: Dispatcher) => {
     const router = express.Router();
@@ -24,50 +26,58 @@ export const deviceEndpoints = (orm: MikroORM<IDatabaseDriver<Connection>>, disp
         }
     });
 
-    router.post("/edit", helper.verifyReq(deviceEditProps, true), helper.getDevice(orm), async (req, res) => {
-        let device: DeviceEditProps = res.locals.device;
+    router.post(
+        "/edit",
+        checkSchema(deviceEditSchema),
+        rejectIfBadRequest,
+        helper.getDevice(orm),
+        async (req: Request, res: Response) => {
+            let device: DeviceEditProps = res.locals.device;
 
-        const changedFields: Partial<DeviceEditProps> = Object.fromEntries(
-            Object.entries(res.locals.object).filter(([key, value]) => value !== device![<keyof typeof device>key])
-        );
+            let object = objectFromSchema(deviceEditSchema, req.body);
 
-        if (Object.keys(changedFields).length === 0) {
-            return helper.badRequest(res, "no field was changed");
-        }
+            const changedFields: Partial<DeviceEditProps> = Object.fromEntries(
+                Object.entries(object).filter(([key, value]) => value !== device![<keyof typeof device>key])
+            );
 
-        let areValid = areRegistrationPropsValid(device);
-        if (areValid !== true) {
-            return helper.badRequest(res, areValid);
-        }
-
-        if ("ip" in changedFields) {
-            let sameDeviceIP = await orm.em.count(Device, {
-                ip: changedFields.ip,
-            });
-            if (sameDeviceIP != 0) {
-                return helper.badRequest(res, "there is already device with the same ip address");
+            if (Object.keys(changedFields).length === 0) {
+                return helper.badRequest(res, "no field was changed");
             }
-        }
 
-        device = orm.em.assign(device, changedFields);
+            let areValid = areRegistrationPropsValid(device);
+            if (areValid !== true) {
+                return helper.badRequest(res, areValid);
+            }
 
-        try {
-            await orm.em.persistAndFlush(device);
-        } catch (err) {
-            return helper.error(500, res, "could not modify entity");
-        }
-        try {
-            await dispatcher.reloadWorker(device.device_uuid);
-        } catch (err) {
-            return helper.error(500, res, "entity was modified but its worker could not be reloaded", {
+            if ("ip" in changedFields) {
+                let sameDeviceIP = await orm.em.count(Device, {
+                    ip: changedFields.ip,
+                });
+                if (sameDeviceIP != 0) {
+                    return helper.badRequest(res, "there is already device with the same ip address");
+                }
+            }
+
+            device = orm.em.assign(device, changedFields);
+
+            try {
+                await orm.em.persistAndFlush(device);
+            } catch (err) {
+                return helper.error(500, res, "could not modify entity");
+            }
+            try {
+                await dispatcher.reloadWorker(device.device_uuid);
+            } catch (err) {
+                return helper.error(500, res, "entity was modified but its worker could not be reloaded", {
+                    changedFields,
+                });
+            }
+            return res.json({
+                error: false,
                 changedFields,
             });
         }
-        return res.json({
-            error: false,
-            changedFields,
-        });
-    });
+    );
 
     return router;
 };
@@ -76,7 +86,7 @@ export interface DeviceEditProps extends RegistrationProps {
     device_uuid: string;
 }
 
-const deviceEditProps = {
-    ...registrationProps,
-    device_uuid: "string",
+const deviceEditSchema = {
+    ...registrationSchema,
+    device_uuid: validators.uuid,
 };

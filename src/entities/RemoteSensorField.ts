@@ -1,10 +1,10 @@
 import { Entity, Property, PrimaryKey, OneToMany, Collection, Cascade, ManyToOne, Enum } from "@mikro-orm/core";
 import { RemoteSensor } from "./RemoteSensor";
 
-export enum FieldPriority {
-    PRIMARY = 0,
-    SECONDARY = 1,
-}
+export const FieldPriority = {
+    PRIMARY: 0,
+    SECONDARY: 1,
+};
 
 export const colorRegex = /^(0x|0X)[a-fA-F0-9]{6}$/;
 
@@ -38,6 +38,12 @@ export class RemoteSensorField {
 
     @Property()
     range_max: number;
+
+    @Property({ nullable: true })
+    alarm_lower_threshold: number | null;
+
+    @Property({ nullable: true })
+    alarm_upper_threshold: number | null;
 
     @ManyToOne(() => RemoteSensor)
     remote_sensor!: RemoteSensor;
