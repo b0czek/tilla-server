@@ -67,10 +67,12 @@ export const remoteRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, dispatc
             });
             // create fields for the remote sensor,
             let fields = props.fields.map((field) => {
-                let { color, ...f } = field;
+                let { color, alarm_lower_threshold, alarm_upper_threshold, ...f } = field;
 
                 return orm.em.create(RemoteSensorField, {
                     color: Number(color),
+                    alarm_upper_threshold: alarm_upper_threshold ?? null,
+                    alarm_lower_threshold: alarm_lower_threshold ?? null,
                     ...f,
                     remote_sensor: remoteSensor,
                 });
@@ -186,6 +188,14 @@ const remoteSensorRegistrationSchema: Schema = {
     },
     "fields.*.range_min": validators.int,
     "fields.*.range_max": validators.int,
+    "fields.*.alarm_lower_threshold": {
+        ...validators.int,
+        optional: true,
+    },
+    "fields.*.alarm_upper_threshold": {
+        ...validators.int,
+        optional: true,
+    },
 };
 
 interface RemoteSensorFieldProps {
@@ -196,6 +206,8 @@ interface RemoteSensorFieldProps {
     priority: number;
     range_min: number;
     range_max: number;
+    alarm_lower_threshold?: number;
+    alarm_upper_threshold?: number;
 }
 
 interface RemoteSensorRegistrationProps {
