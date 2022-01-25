@@ -1,58 +1,25 @@
 import { Connection, IDatabaseDriver, MikroORM } from "@mikro-orm/core";
-import express from "express";
+import express, { Request, Response } from "express";
 import { helper } from "..";
 import { Dispatcher, sensorFields } from "../../dispatcher";
 import { Device } from "../../entities/Device";
 import { Sensor } from "../../entities/Sensor";
 import { RemoteSensor } from "../../entities/RemoteSensor";
 import { colorRegex, FieldPriority, RemoteSensorField } from "../../entities/RemoteSensorField";
+import { checkSchema, Schema } from "express-validator";
+import validators, { rejectIfBadRequest } from "../validators";
 
 export const remoteRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, dispatcher: Dispatcher) => {
     const router = express.Router();
 
     router.post(
         "/register",
-        helper.verifyReq(remoteSensorRegistrationProps),
+        checkSchema(remoteSensorRegistrationSchema),
+        rejectIfBadRequest,
         helper.getDevice(orm),
-        async (req, res) => {
+        async (req: Request, res: Response) => {
             let props: RemoteSensorRegistrationProps = req.body;
             let device: Device = res.locals.device;
-
-            // #region sensor fields validation
-            if (!Array.isArray(props.fields)) {
-                return helper.badRequest(res, "fields must be an array");
-            }
-            if (props.fields.length === 0) {
-                return helper.badRequest(res, "remote sensor has to have at least one field");
-            }
-            for (let field of props.fields) {
-                if (typeof field !== "object" || Array.isArray(field) || field === null) {
-                    return helper.badRequest(res, "invalid remote sensor field");
-                }
-                let valid = helper.verifyObject(remoteSensorFieldProps, field);
-                if (valid !== true) {
-                    return helper.badRequest(res, `invalid field ${valid}`);
-                }
-                if (field.label.length < 3) {
-                    return helper.badRequest(res, `field label cannot be shorter than 3 letters`);
-                }
-                if (!colorRegex.test(field.color)) {
-                    return helper.badRequest(res, "field color invalid");
-                }
-                if (!Object.values(FieldPriority).includes(field.priority)) {
-                    return helper.badRequest(res, "field priority invalid");
-                }
-                if (!sensorFields.includes(field.name)) {
-                    return helper.badRequest(res, "field name invalid");
-                }
-                if (props.fields.filter((f) => f.name === field.name).length !== 1) {
-                    return helper.badRequest(res, "field name cannot occur more than once");
-                }
-                if (props.fields.filter((f) => f.priority === field.priority).length !== 1) {
-                    return helper.badRequest(res, "field priority cannot overlap");
-                }
-            }
-            // #endregion
 
             // #region check if sensor  is already registered on this device
 
@@ -100,10 +67,12 @@ export const remoteRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, dispatc
             });
             // create fields for the remote sensor,
             let fields = props.fields.map((field) => {
-                let { color, ...f } = field;
+                let { color, alarm_lower_threshold, alarm_upper_threshold, ...f } = field;
 
                 return orm.em.create(RemoteSensorField, {
                     color: Number(color),
+                    alarm_upper_threshold: alarm_upper_threshold ?? null,
+                    alarm_lower_threshold: alarm_lower_threshold ?? null,
                     ...f,
                     remote_sensor: remoteSensor,
                 });
@@ -123,9 +92,13 @@ export const remoteRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, dispatc
 
     router.post(
         "/unregister",
-        helper.verifyReq({ device_uuid: "string", remote_sensor_uuid: "string" }),
+        checkSchema({
+            device_uuid: validators.uuid,
+            remote_sensor_uuid: validators.uuid,
+        }),
+        rejectIfBadRequest,
         helper.getDevice(orm),
-        async (req, res) => {
+        async (req: Request, res: Response) => {
             let device: Device = res.locals.device;
             let remoteSensors!: RemoteSensor[];
             try {
@@ -157,14 +130,72 @@ export const remoteRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, dispatc
     return router;
 };
 
-const remoteSensorFieldProps = {
-    name: "string",
-    label: "string",
-    color: "string",
-    unit: "string",
-    priority: "number",
-    range_min: "number",
-    range_max: "number",
+const hasDuplicates = (arr: any[]) => arr.length !== new Set(arr).size;
+
+const remoteSensorRegistrationSchema: Schema = {
+    device_uuid: validators.uuid,
+    remote_device_uuid: validators.uuid,
+    remote_sensor_uuid: validators.uuid,
+    polling_interval: validators.int,
+    max_sample_age: validators.int,
+
+    fields: {
+        isArray: {
+            bail: true,
+            options: {
+                min: 1,
+            },
+        },
+        custom: {
+            bail: true,
+            options: (array: RemoteSensorFieldProps[]) =>
+                !hasDuplicates(array.map((field) => field.priority)) &&
+                !hasDuplicates(array.map((field) => field.name)),
+            errorMessage: "there must not be overlaps of priority and name in fields",
+        },
+    },
+
+    "fields.*.name": {
+        ...validators.string,
+        isIn: {
+            bail: true,
+            options: [sensorFields],
+        },
+    },
+    "fields.*.label": {
+        ...validators.string,
+        isLength: {
+            bail: true,
+            options: {
+                min: 3,
+            },
+        },
+    },
+    "fields.*.color": {
+        ...validators.string,
+        matches: {
+            bail: true,
+            options: colorRegex,
+        },
+    },
+    "fields.*.priority": {
+        ...validators.int,
+
+        isIn: {
+            bail: true,
+            options: [Object.values(FieldPriority)],
+        },
+    },
+    "fields.*.range_min": validators.int,
+    "fields.*.range_max": validators.int,
+    "fields.*.alarm_lower_threshold": {
+        ...validators.int,
+        optional: true,
+    },
+    "fields.*.alarm_upper_threshold": {
+        ...validators.int,
+        optional: true,
+    },
 };
 
 interface RemoteSensorFieldProps {
@@ -175,16 +206,9 @@ interface RemoteSensorFieldProps {
     priority: number;
     range_min: number;
     range_max: number;
+    alarm_lower_threshold?: number;
+    alarm_upper_threshold?: number;
 }
-
-const remoteSensorRegistrationProps = {
-    device_uuid: "string",
-    remote_sensor_uuid: "string",
-    remote_device_uuid: "string",
-    polling_interval: "number",
-    max_sample_age: "number",
-    fields: "object",
-};
 
 interface RemoteSensorRegistrationProps {
     device_uuid: string;
