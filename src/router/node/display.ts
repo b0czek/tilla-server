@@ -184,7 +184,7 @@ export const displayRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, dispat
                 return helper.badRequest(res, "invalid auth key");
             }
 
-            let since = <number>(<any>req.query.since);
+            let since = <number>(<any>req.query.since) ?? 0;
 
             let remoteSensors = (await device.remote_sensors.init()).getItems();
 

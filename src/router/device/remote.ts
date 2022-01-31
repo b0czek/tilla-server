@@ -1,12 +1,14 @@
 import { Connection, IDatabaseDriver, MikroORM } from "@mikro-orm/core";
 import express, { Request, Response } from "express";
+import { checkSchema, Schema } from "express-validator";
+
 import { helper } from "..";
 import { Dispatcher, sensorFields } from "../../dispatcher";
 import { Device } from "../../entities/Device";
 import { Sensor } from "../../entities/Sensor";
 import { RemoteSensor } from "../../entities/RemoteSensor";
 import { colorRegex, FieldPriority, RemoteSensorField } from "../../entities/RemoteSensorField";
-import { checkSchema, Schema } from "express-validator";
+import { Device as DeviceApi } from "../../api";
 import validators, { rejectIfBadRequest } from "../validators";
 
 export const remoteRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, dispatcher: Dispatcher) => {
@@ -83,10 +85,22 @@ export const remoteRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, dispatc
             } catch (err) {
                 return helper.error(500, res, "entity could not be persisted");
             }
-            return res.json({
+
+            res.json({
                 error: false,
                 remote_sensor_uuid: remoteSensor.remote_sensor_uuid,
             });
+
+            // try to restart device
+            try {
+                await DeviceApi.Restart.fetch({
+                    auth_key: device.auth_key,
+                    ip: device.ip,
+                });
+            } catch (err) {
+                console.error(`failed to restart device ${device.name}`);
+            }
+            return;
         }
     );
 
@@ -121,9 +135,20 @@ export const remoteRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, dispatc
                 return helper.error(500, res, "remote sensor could not be removed from database");
             }
 
-            return res.json({
+            res.json({
                 error: false,
             });
+
+            // try to restart device
+            try {
+                await DeviceApi.Restart.fetch({
+                    auth_key: device.auth_key,
+                    ip: device.ip,
+                });
+            } catch (err) {
+                console.error(`failed to restart device ${device.name}`);
+            }
+            return;
         }
     );
 
