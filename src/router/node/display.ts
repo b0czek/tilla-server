@@ -223,9 +223,12 @@ export const displayRouter = (orm: MikroORM<IDatabaseDriver<Connection>>, dispat
                     sensors[remoteSensor.remote_sensor_uuid] = {
                         device_online: worker.online,
                         new_samples_count: samples.length,
-                        current_values: Object.fromEntries(
-                            sensorFieldNames.map((fieldName) => [fieldName, sensor!.data[fieldName]])
-                        ),
+                        current_values: {
+                            ...Object.fromEntries(
+                                sensorFieldNames.map((fieldName) => [fieldName, sensor!.data[fieldName]])
+                            ),
+                            error: sensor.data.error,
+                        },
                         ...optimizedSamples,
                     };
                 } catch (err) {
