@@ -6,7 +6,8 @@
     "license": "MIT",
     "scripts": {
         "build": "tsc",
-        "start": "tsc && node dist/main.js",
+        "buildstart": "tsc && node dist/main.js",
+        "start": "node dist/main.js",
         "watch": "nodemon src/main.ts --watch 'src/**/*'",
         "migrate": "mikro-orm migration:create --initial",
         "test": "jest --runInBand"

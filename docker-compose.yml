@@ -1,0 +1,23 @@
+version: '3.8'
+services:
+  redis:
+    image: redis:alpine
+    restart: always
+    networks:
+      - tilla-network
+  server:
+    build: .
+    restart: always
+    volumes:
+      - ./tilla.sqlite:/app/tilla.sqlite
+    environment:
+      - TZ=Europe/Warsaw
+      - REDIS_HOST=redis
+    networks:
+      - tilla-network
+    ports:
+      - 3001:3001
+
+networks:
+  tilla-network:
+    driver: bridge
